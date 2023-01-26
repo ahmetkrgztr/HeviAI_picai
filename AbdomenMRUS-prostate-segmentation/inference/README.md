@@ -25,10 +25,6 @@ To perform inference, prepare the case in the same format as the [test case](../
 ```bash
 test
 ├── images
-│   ├── transverse-adc-prostate-mri
-│   │   └── ProstateX-0000_07-07-2011_adc.mha
-│   ├── transverse-hbv-prostate-mri
-│   │   └── ProstateX-0000_07-07-2011_hbv.mha
 │   └── transverse-t2-prostate-mri
 │       └── ProstateX-0000_07-07-2011_t2w.mha
 ```
