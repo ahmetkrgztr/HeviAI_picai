@@ -1,15 +1,18 @@
 import os
+import pickle
 import subprocess
 from pathlib import Path
-import numpy as np
+from typing import Union
 
+import numpy as np
 import SimpleITK as sitk
 from evalutils import SegmentationAlgorithm
 from evalutils.validators import (UniqueImagesValidator,
                                   UniquePathIndicesValidator)
+from picai_baseline.nnunet.softmax_export import \
+    save_softmax_nifti_from_softmax
 from picai_prep.data_utils import atomic_image_write
-from picai_prep.preprocessing import (PreprocessingSettings, Sample,
-                                      resample_to_reference_scan)
+from picai_prep.preprocessing import PreprocessingSettings, Sample, resample_to_reference_scan
 
 
 class MissingSequenceError(Exception):
@@ -28,15 +31,33 @@ class MultipleScansSameSequencesError(Exception):
         super.__init__(message)
 
 
+def convert_to_original_extent(pred: np.ndarray, pkl_path: Union[Path, str], dst_path: Union[Path, str]):
+    # convert to nnUNet's internal softmax format
+    pred = np.array([1-pred, pred])
+
+    # read physical properties of current case
+    with open(pkl_path, "rb") as fp:
+        properties = pickle.load(fp)
+
+    # let nnUNet resample to original physical space
+    save_softmax_nifti_from_softmax(
+        segmentation_softmax=pred,
+        out_fname=str(dst_path),
+        properties_dict=properties,
+    )
+
+
 def strip_metadata(img: sitk.Image) -> None:
     for key in img.GetMetaDataKeys():
         img.EraseMetaData(key)
+
 
 def overwrite_affine(fixed_img: sitk.Image, moving_img: sitk.Image) -> sitk.Image:   
     moving_img.SetOrigin(fixed_img.GetOrigin())
     moving_img.SetDirection(fixed_img.GetDirection())
     moving_img.SetSpacing(fixed_img.GetSpacing())
     return moving_img
+
 
 class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
     """
@@ -127,36 +148,36 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
         sm_arr = np.load(pred_path_prostate)['softmax']
         pz_arr = np.array(sm_arr[1,:,:,:]).astype('float32')
         tz_arr = np.array(sm_arr[2,:,:,:]).astype('float32')
-        
+    
         # read postprocessed prediction
         pred_path = str(self.nnunet_out_dir / "scan.nii.gz")
         pred: sitk.Image = sitk.ReadImage(pred_path)
-        
-        pz_sitk: sitk.Image = sitk.GetImageFromArray(pz_arr)
-        tz_sitk: sitk.Image = sitk.GetImageFromArray(tz_arr)
-        
-        pz_sitk = overwrite_affine(pred, pz_sitk)
-        tz_sitk = overwrite_affine(pred, tz_sitk)
-        
-        pz_sitk.CopyInformation(pred)
-        tz_sitk.CopyInformation(pred)
 
-        # transform predictions to original space
-        reference_scan = sitk.ReadImage(str(self.scan_paths[0]))
-        pz_sitk = resample_to_reference_scan(pz_sitk, reference_scan_original=reference_scan)
-        tz_sitk = resample_to_reference_scan(tz_sitk, reference_scan_original=reference_scan)
-        
-        print("T2 shape", sitk.GetArrayFromImage(reference_scan).shape)
-        print("pz_sitk shape", sitk.GetArrayFromImage(pz_sitk).shape)
-        print("tz_sitk shape", sitk.GetArrayFromImage(tz_sitk).shape)
-        
-        # remove metadata to get rid of SimpleITK warning
-        strip_metadata(pz_sitk)
-        strip_metadata(tz_sitk)
+        for pred, save_path in [
+            (pz_arr, self.prostate_segmentation_path_pz),
+            (tz_arr, self.prostate_segmentation_path_tz),
+        ]:
+            # the prediction is currently at the size and location of the nnU-Net preprocessed
+            # scan, so we need to convert it to the original extent before we continue
+            convert_to_original_extent(
+                pred=pred,
+                pkl_path=self.nnunet_out_dir / "scan.pkl",
+                dst_path=self.nnunet_out_dir / "softmax.nii.gz",
+            )
 
-        # save prediction to output folder
-        atomic_image_write(pz_sitk, str(self.prostate_segmentation_path_pz))
-        atomic_image_write(tz_sitk, str(self.prostate_segmentation_path_tz))
+            # now each voxel in softmax.nii.gz corresponds to the same voxel in the reference scan
+            pred = sitk.ReadImage(str(self.nnunet_out_dir / "softmax.nii.gz"))
+
+            # convert prediction to a SimpleITK image and infuse the physical metadata of the reference scan
+            reference_scan_original_path = str(self.scan_paths[0])
+            reference_scan = sitk.ReadImage(reference_scan_original_path)
+            pred = resample_to_reference_scan(pred, reference_scan_original=reference_scan)
+
+            # remove metadata to get rid of SimpleITK warning
+            strip_metadata(pred)
+
+            # save prediction to output folder
+            atomic_image_write(pred, save_path, mkdir=True)
 
     def predict(self, task, trainer="nnUNetTrainerV2", network="3d_fullres",
                 checkpoint="model_final_checkpoint", folds="0,1,2,3,4", store_probability_maps=True,
