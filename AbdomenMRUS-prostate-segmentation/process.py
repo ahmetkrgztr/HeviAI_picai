@@ -11,8 +11,9 @@ from evalutils.validators import (UniqueImagesValidator,
                                   UniquePathIndicesValidator)
 from picai_baseline.nnunet.softmax_export import \
     save_softmax_nifti_from_softmax
-from picai_prep.data_utils import atomic_image_write
-from picai_prep.preprocessing import PreprocessingSettings, Sample, resample_to_reference_scan
+from picai_prep import atomic_image_write
+from picai_prep.preprocessing import (PreprocessingSettings, Sample,
+                                      resample_to_reference_scan)
 
 
 class MissingSequenceError(Exception):
@@ -143,12 +144,12 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
                 checkpoint="model_best",
                 folds="0"
             )
-        
+
         pred_path_prostate = str(self.nnunet_out_dir / "scan.npz")
         sm_arr = np.load(pred_path_prostate)['softmax']
-        pz_arr = np.array(sm_arr[1,:,:,:]).astype('float32')
-        tz_arr = np.array(sm_arr[2,:,:,:]).astype('float32')
-    
+        pz_arr = np.array(sm_arr[1, :, :, :]).astype('float32')
+        tz_arr = np.array(sm_arr[2, :, :, :]).astype('float32')
+
         # read postprocessed prediction
         pred_path = str(self.nnunet_out_dir / "scan.nii.gz")
         pred: sitk.Image = sitk.ReadImage(pred_path)
