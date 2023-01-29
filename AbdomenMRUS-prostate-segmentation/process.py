@@ -82,8 +82,8 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
             "/input/images/transverse-t2-prostate-mri"
         ]
         self.scan_paths = []
-        self.prostate_segmentation_path_pz = Path("/output/images/transverse-whole-prostate-mri/prostate_gland_sm_pz.mha")
-        self.prostate_segmentation_path_tz = Path("/output/images/transverse-whole-prostate-mri/prostate_gland_sm_tz.mha")
+        self.prostate_segmentation_path_pz = Path("/output/images/transverse-whole-prostate-mri/prostate_gland_sm_pz.nii.gz")
+        self.prostate_segmentation_path_tz = Path("/output/images/transverse-whole-prostate-mri/prostate_gland_sm_tz.nii.gz")
 
         # input / output paths for nnUNet
         self.nnunet_inp_dir = Path("/opt/algorithm/nnunet/input")
@@ -173,12 +173,18 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
             reference_scan_original_path = str(self.scan_paths[0])
             reference_scan = sitk.ReadImage(reference_scan_original_path)
             pred = resample_to_reference_scan(pred, reference_scan_original=reference_scan)
+            
+            # clip small values to 0 to save disk space
+            arr = sitk.GetArrayFromImage(pred)
+            arr[arr < 1e-3] = 0
+            pred_clipped = sitk.GetImageFromArray(pred)
+            pred_clipped.CopyInformation(pred)
 
             # remove metadata to get rid of SimpleITK warning
-            strip_metadata(pred)
+            strip_metadata(pred_clipped)
 
             # save prediction to output folder
-            atomic_image_write(pred, save_path, mkdir=True)
+            atomic_image_write(pred_clipped, save_path, mkdir=True)
 
     def predict(self, task, trainer="nnUNetTrainerV2", network="3d_fullres",
                 checkpoint="model_final_checkpoint", folds="0,1,2,3,4", store_probability_maps=True,
