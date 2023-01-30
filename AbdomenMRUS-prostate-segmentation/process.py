@@ -177,7 +177,7 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
             # clip small values to 0 to save disk space
             arr = sitk.GetArrayFromImage(pred)
             arr[arr < 1e-3] = 0
-            pred_clipped = sitk.GetImageFromArray(pred)
+            pred_clipped = sitk.GetImageFromArray(arr)
             pred_clipped.CopyInformation(pred)
 
             # remove metadata to get rid of SimpleITK warning
