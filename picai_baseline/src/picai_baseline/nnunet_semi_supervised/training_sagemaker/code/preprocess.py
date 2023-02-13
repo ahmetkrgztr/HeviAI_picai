@@ -129,6 +129,7 @@ def main(taskname="Task2203_picai_baseline"):
     
     #Check if is there any missing in softmax predictions
     #If not add softmax predictions as additional modalities
+    
     all_case_names = nnunet_splits[0]["train"] + nnunet_splits[0]["val"]
     all_case_names.sort()
     
