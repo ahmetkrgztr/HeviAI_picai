@@ -1,0 +1,6 @@
+evalutils==0.3.0
+nnunet==1.7.0
+SimpleITK>=2.1.1.2
+picai_eval>=1.4.1
+picai_prep>=2.0.0
+picai_baseline>=0.5.2
