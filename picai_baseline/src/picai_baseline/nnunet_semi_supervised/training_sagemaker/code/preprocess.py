@@ -18,11 +18,8 @@ import os
 import shutil
 from pathlib import Path
 from subprocess import check_call
-import os
 
-from picai_prep.preprocessing import Sample, crop_or_pad, PreprocessingSettings
 import SimpleITK as sitk
-from picai_prep.data_utils import atomic_image_write
 from tqdm import tqdm
 
 from picai_baseline.prepare_data_semi_supervised import \
@@ -36,13 +33,16 @@ from picai_baseline.splits.picai_pubpriv import \
     nnunet_splits as picai_pubpriv_splits
 from picai_baseline.splits.picai_pubpriv_nnunet import \
     nnunet_splits as picai_pubpriv_nnunet_splits
+from picai_prep.data_utils import atomic_image_write
+from picai_prep.preprocessing import PreprocessingSettings, Sample, crop_or_pad
+
 
 class MissingSequenceError(Exception):
     """Exception raised when a sequence is missing."""
 
     def __init__(self, name, folder):
         message = f"Could not find scan for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
         
 def overwrite_affine(fixed_img: sitk.Image, moving_img: sitk.Image) -> sitk.Image:   
     moving_img.SetOrigin(fixed_img.GetOrigin())

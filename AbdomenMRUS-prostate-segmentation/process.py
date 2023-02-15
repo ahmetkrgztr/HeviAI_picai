@@ -9,11 +9,12 @@ import SimpleITK as sitk
 from evalutils import SegmentationAlgorithm
 from evalutils.validators import (UniqueImagesValidator,
                                   UniquePathIndicesValidator)
-from picai_baseline.nnunet.softmax_export import \
-    save_softmax_nifti_from_softmax
-from picai_prep import atomic_image_write
+from picai_prep import atomic_file_copy, atomic_image_write
 from picai_prep.preprocessing import (PreprocessingSettings, Sample,
                                       resample_to_reference_scan)
+
+from picai_baseline.nnunet.softmax_export import \
+    save_softmax_nifti_from_softmax
 
 
 class MissingSequenceError(Exception):
@@ -21,7 +22,7 @@ class MissingSequenceError(Exception):
 
     def __init__(self, name, folder):
         message = f"Could not find scan for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
 
 
 class MultipleScansSameSequencesError(Exception):
@@ -29,7 +30,7 @@ class MultipleScansSameSequencesError(Exception):
 
     def __init__(self, name, folder):
         message = f"Found multiple scans for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
 
 
 def convert_to_original_extent(pred: np.ndarray, pkl_path: Union[Path, str], dst_path: Union[Path, str]):
@@ -82,8 +83,9 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
             "/input/images/transverse-t2-prostate-mri"
         ]
         self.scan_paths = []
-        self.prostate_segmentation_path_pz = Path("/output/images/transverse-whole-prostate-mri/prostate_gland_sm_pz.nii.gz")
-        self.prostate_segmentation_path_tz = Path("/output/images/transverse-whole-prostate-mri/prostate_gland_sm_tz.nii.gz")
+        self.prostate_segmentation_path_pz = Path("/output/images/softmax-prostate-peripheral-zone-segmentation/prostate_gland_sm_pz.mha")
+        self.prostate_segmentation_path_tz = Path("/output/images/softmax-prostate-central-gland-segmentation/prostate_gland_sm_tz.mha")
+        self.prostate_segmentation_path = Path("/output/images/prostate-zonal-segmentation/prostate_gland.mha")
 
         # input / output paths for nnUNet
         self.nnunet_inp_dir = Path("/opt/algorithm/nnunet/input")
@@ -153,6 +155,9 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
         # read postprocessed prediction
         pred_path = str(self.nnunet_out_dir / "scan.nii.gz")
         pred: sitk.Image = sitk.ReadImage(pred_path)
+
+        # save postprocessed prediction to output
+        atomic_file_copy(pred_path, str(self.prostate_segmentation_path), mkdir=True)
 
         for pred, save_path in [
             (pz_arr, self.prostate_segmentation_path_pz),

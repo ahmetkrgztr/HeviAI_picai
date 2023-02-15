@@ -14,13 +14,19 @@ docker volume create $DOCKER_FILE_SHARE
 docker run --rm \
         -v $SCRIPTPATH/test/:/input/ \
         -v $DOCKER_FILE_SHARE:/output/ \
-        picai_prostate_segmentation_processor
+        heviai/picai_prostate_segmentation_processor
 
-# check prostate segmentation (at /output/images/transverse-whole-prostate-mri/prostate_gland.mha)
+# check peripheral zone segmentation
 docker run --rm \
         -v $DOCKER_FILE_SHARE:/output/ \
-        -v $SCRIPTPATH/test/:/input/ \
-        insighttoolkit/simpleitk-notebooks:latest python -c "import sys; import numpy as np; import SimpleITK as sitk; f1 = sitk.GetArrayFromImage(sitk.ReadImage('/output/images/transverse-whole-prostate-mri/prostate_gland.mha')); f2 = sitk.GetArrayFromImage(sitk.ReadImage('/input/transverse-whole-prostate-mri/ProstateX-0000_07-07-2011.mha')); print('Pixels different between prediction and reference:', np.abs(f1!=f2).sum()); sys.exit(int(np.abs(f1!=f2).sum() > 10));"
+        -v $SCRIPTPATH/output/:/input/ \
+        insighttoolkit/simpleitk-notebooks:latest python -c "import sys; import numpy as np; import SimpleITK as sitk; f1 = sitk.GetArrayFromImage(sitk.ReadImage('/output/images/softmax-prostate-peripheral-zone-segmentation/prostate_gland_sm_pz.mha')); f2 = sitk.GetArrayFromImage(sitk.ReadImage('/input/images/softmax-prostate-peripheral-zone-segmentation/prostate_gland_sm_pz.mha')); print('max. difference between prediction and reference:', np.abs(f1-f2).max()); sys.exit(int(np.abs(f1-f2).max() > 1e-3));"
+
+# check central zone segmentation
+docker run --rm \
+        -v $DOCKER_FILE_SHARE:/output/ \
+        -v $SCRIPTPATH/output/:/input/ \
+        insighttoolkit/simpleitk-notebooks:latest python -c "import sys; import numpy as np; import SimpleITK as sitk; f1 = sitk.GetArrayFromImage(sitk.ReadImage('/output/images/softmax-prostate-central-gland-segmentation/prostate_gland_sm_tz.mha')); f2 = sitk.GetArrayFromImage(sitk.ReadImage('/input/images/softmax-prostate-central-gland-segmentation/prostate_gland_sm_tz.mha')); print('max. difference between prediction and reference:', np.abs(f1-f2).max()); sys.exit(int(np.abs(f1-f2).max() > 1e-3));"
 
 if [ $? -eq 0 ]; then
     echo "Tests successfully passed..."
