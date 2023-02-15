@@ -1,190 +1,72 @@
-# Baseline AI Models for Prostate Cancer Detection in MRI
+# PI-CAI Closed Test Phase Submission
 
-This repository contains utilities to set up and train deep learning-based detection models for clinically significant prostate cancer (csPCa) in MRI. In turn, these models serve as the official baseline AI solutions for the [PI-CAI challenge](https://pi-cai.grand-challenge.org/). As of now, the following three models will be provided and supported:
-
-- [U-Net](unet_baseline.md)
-- [nnU-Net](nnunet_baseline.md)
-- [nnDetection](nndetection_baseline.md)
-
-All three solutions share the same starting point, with respect to their expected [folder structure](#folder-structure) and [data preparation](#data-preparation) pipeline.
-
-## Issues
-Please feel free to raise any issues you encounter [here](https://github.com/DIAGNijmegen/picai_baseline/issues).
+## 1. Docker container
+Define the Docker container that can be used to preprocess the data, and train the models. The Docker build process must run on Linux, including the systems from the PI-CAI organizers, to ensure reproducibility. For this example, we will use the [PI-CAI nnU-Net Docker container](https://github.com/DIAGNijmegen/picai_baseline/tree/main/src/picai_baseline/nnunet/training_docker). You can [install any public library](https://github.com/DIAGNijmegen/picai_baseline/blob/2ad6b5aa03a22633ef2cbecfeeefc1efe6f9b01a/src/picai_baseline/nnunet/training_docker/Dockerfile#L36), and [add custom code to the Docker environment](https://github.com/DIAGNijmegen/picai_baseline/blob/2ad6b5aa03a22633ef2cbecfeeefc1efe6f9b01a/src/picai_baseline/nnunet/training_docker/Dockerfile#L38-L53).
 
 
-## Installation
-`picai_baseline` can be pip-installed:
+## 2. Preprocessing
+This script is used to preprocess the dataset, in our example for training within the nnU-Net framework. The script expects to be passed a few arguments, including the directories where the images and labels can be found.
 
-```bash
-pip install picai_baseline
-```
+This script loads the cross-validation splits for the dataset, either from a JSON file specified by the splits argument, or from one of several predefined split configurations specified by the splits argument. To debug this script, you can use the public PI-CAI Training and Development dataset (`--splits=picai_pub`), which can be changed to the PI-CAI Public and Private Training dataset at submission (`--splits=picai_pubpriv`).
 
-Alternatively, `picai_baseline` can be installed from source:
+The provided preprocessing script follows the preprocessing steps outlined in the [PI-CAI Baseline tutorial](https://github.com/DIAGNijmegen/picai_baseline), plus the conversion to the nnU-Net preprocessed format.
 
-```bash
-git clone https://github.com/DIAGNijmegen/picai_baseline
-cd picai_baseline
-pip install -e .
-```
+At the end of the script, the preprocessed dataset is exported by copying it to the directory specified by `args.outputdir`. Please note, that all other resources are destroyed! As such, supporting files like `dataset.json` must be exported too!
 
-This ensures the scripts are present locally, which enables you to run the provided Python scripts. Additionally, this allows you to modify the baseline solutions, due to the `-e` option. Furthermore, this ensures the latest version is installed.
+Note: no training happens yet. Ideally, this step should not require a GPU.
+
+The preprocessing pipeline can be tested locally by adapting the [`run_preprocessing_debug.sh`](run_preprocessing_debug.sh) or [`run_preprocessing_public.sh`](run_preprocessing_public.sh) script. To do this, set up the paths to the required input and output folders, which are detailed below.
 
 
-## General Setup
-We define setup steps that are shared between the different baseline algorithms. To follow the baseline algorithm tutorials, this setup must be completed first.
+## 3. Training
+This script is for training your method, with the provided example training a semi-supervised nnU-Net model. The model is trained on a dataset of images and corresponding labels (segmentation masks), which were preprocessed in step 2. Preprocessing. The script takes in several arguments including the input image and label directories, output directory, and number of folds to train the model on.
+
+The script first defines a function `main()` that sets up an argument parser to parse the input arguments. Then it sets up various paths and directories based on the input arguments and environment variables.
+
+The train script trains the model on the specified folds by calling the `nnunet` command, which is defined through the setup in the definition of the Docker container. 
+
+Finally, all necessary resources for inference are exported to the directory specified by `args.outputdir`. Please note, that all other resources are destroyed! As such, supporting files for inference (like `plans.pkl` for nnU-Net) must be exported too!
+
+Each training session may run for 5 days at most. As this is typically insufficient to train all components, the training pipeline must be divided into chunks. For the nnU-Net baseline in this example, we made the fold configurable. Each fold takes ~2 days to train, so we can split up training in appropriate chunks.
+
+The training pipeline can be tested locally by adapting the [`run_training_local.sh`](run_training_local.sh) script. To do this, set up the paths to the required input and output folders, which are detailed below.
 
 
-### Folder Structure
-We define three main folders that must be prepared apriori:
-- `/input/` contains one of the [PI-CAI datasets](https://pi-cai.grand-challenge.org/DATA/). This can be the Public Training and Development Dataset, the Private Training Dataset, the Hidden Validation and Tuning Cohort, or the Hidden Testing Cohort.
-  - `/input/images/` contains the imaging files. For the Public Training and Development Dataset, these can be retrieved [here](https://zenodo.org/record/6624726).
-  - `/input/labels/` contains the annotations. For the Public Training and Development Dataset, these can be retrieved [here](https://github.com/DIAGNijmegen/picai_labels).
-- `/workdir/` stores intermediate results, such as preprocessed images and annotations.
-  - `/workdir/results/[model name]/` stores model checkpoints/weights during training (enables the ability to pause/resume training).    
-- `/output/` stores training output, such as trained model weights and preprocessing plan.
+## Folder structure
+During preprocessing and training, the Docker container will be run on AWS SageMaker. In this environment, multiple storage types exist:
 
+1. There is about 15 GB of available disk space for local processes (e.g., at `/opt/algorithm`)
+2. A user-configurable amount of temporary storage (removed after preprocessing/training) which is mounted on `/tmp`
+3. Input folders (e.g., with the PI-CAI images or labels) that are mounted at the location specified by `args.imagesdir`, `args.labelsdir`.
+4. Output folder (e.g., to store the preprocessed dataset or trained model resources), mounted at the location specified by `args.outputdir`.
 
-### Data Preparation
-Unless specified otherwise, this tutorial assumes that the [PI-CAI: Public Training and Development Dataset](https://pi-cai.grand-challenge.org/DATA/) will be downloaded and unpacked. Before downloading the dataset, read its [documentation](https://zenodo.org/record/6624726) and [dedicated forum post](https://grand-challenge.org/forums/forum/pi-cai-607/topic/public-training-and-development-dataset-updates-and-fixes-631/) (for all updates/fixes, if any). To download and unpack the dataset, run the following commands:
+The PI-CAI Public and Private Training dataset is approx. 150 GB, so any preprocessing step likely must be performed within the temporary storage at `/tmp`. For the nnU-Net preprocessing pipeline, the provided MHA Archive is first converted to the [nnU-Net Raw Data Archive](https://github.com/DIAGNijmegen/picai_prep#mha-archive--nnu-net-raw-data-archive) (i.e., + 150 GB of storage required), after which nnU-Net crops the images (i.e., + 185 GB of storage required*), and preprocessed the images (i.e., + 450 GB of storage required*). As such, the temporary disk space requirement is high. At the end of the preprocessing script, the preprocessed images are exported. This saves the disk space for 150+185=235 GB worth of images.
 
-```bash
-# download all folds
-curl -C - "https://zenodo.org/record/6624726/files/picai_public_images_fold0.zip?download=1" --output picai_public_images_fold0.zip
-curl -C - "https://zenodo.org/record/6624726/files/picai_public_images_fold1.zip?download=1" --output picai_public_images_fold1.zip
-curl -C - "https://zenodo.org/record/6624726/files/picai_public_images_fold2.zip?download=1" --output picai_public_images_fold2.zip
-curl -C - "https://zenodo.org/record/6624726/files/picai_public_images_fold3.zip?download=1" --output picai_public_images_fold3.zip
-curl -C - "https://zenodo.org/record/6624726/files/picai_public_images_fold4.zip?download=1" --output picai_public_images_fold4.zip
+*nnU-Net's formats are less efficient than the raw images.
 
-# unzip all folds
-unzip picai_public_images_fold0.zip -d /input/images/
-unzip picai_public_images_fold1.zip -d /input/images/
-unzip picai_public_images_fold2.zip -d /input/images/
-unzip picai_public_images_fold3.zip -d /input/images/
-unzip picai_public_images_fold4.zip -d /input/images/
-```
+## Input/output folders
+During **preprocessing**, the following folders will be available:
 
-In case `unzip` is not installed, you can use Docker to unzip the files:
+1. MHA Archive, located at `args.imagesdir`. This folder contains the imaging dataset in the [MHA Archive format](https://github.com/DIAGNijmegen/picai_prep#what-is-an-mha-archive). The folder structure will be the same as during the Open Development phase (see [here]((https://github.com/DIAGNijmegen/picai_prep#what-is-an-mha-archive))). To test your pipeline locally, mount this folder read-only: `-v /path/to/images:/input/images:ro`.
+2. Labels, located at `args.labelsdir`. This folder contains all annotations: case-level marksheet, csPCa lesion delineations (manual and AI-derived), and prostate segmentations. The folder structure will be the same as [`picai_labels`](https://github.com/DIAGNijmegen/picai_labels). To test your pipeline locally, mount this folder read-only: `-v /path/to/picai_labels:/input/picai_labels:ro`.
+3. Output folder, located at `args.outputdir`. This folder must contain the preprocessed dataset at the end of your preprocessing pipeline. Any file that's not in this folder, will be lost! To test your pipeline locally, mount this folder: `-v /path/to/preprocessed:/output`.
 
-```bash
-docker run --cpus=2 --memory=8gb --rm -v /path/to/input:/input joeranbosma/picai_nnunet:latest unzip /input/picai_public_images_fold0.zip -d /input/images/
-docker run --cpus=2 --memory=8gb --rm -v /path/to/input:/input joeranbosma/picai_nnunet:latest unzip /input/picai_public_images_fold1.zip -d /input/images/
-docker run --cpus=2 --memory=8gb --rm -v /path/to/input:/input joeranbosma/picai_nnunet:latest unzip /input/picai_public_images_fold2.zip -d /input/images/
-docker run --cpus=2 --memory=8gb --rm -v /path/to/input:/input joeranbosma/picai_nnunet:latest unzip /input/picai_public_images_fold3.zip -d /input/images/
-docker run --cpus=2 --memory=8gb --rm -v /path/to/input:/input joeranbosma/picai_nnunet:latest unzip /input/picai_public_images_fold4.zip -d /input/images/
-```
+Optionally, you can mount a folder to `/workdir` to debug/see what's going on in your pipeline: `-v /path/to/workdir:/workdir`. Depending on your setup, you can mount a folder with the preprocessing pipeline itself: `-v /path/to/code:/code:ro`.
 
-Please follow the [instructions here](nnunet_baseline.md#nnu-net---docker-setup) to set up the Docker container.
+-------
 
-Also, collect the training annotations via the following command:
+During **training**, the following folders will be available:
 
-```bash
-git clone https://github.com/DIAGNijmegen/picai_labels /input/labels/
-```
+1. MHA Archive, see above.
+2. Labels, see above.
+3. Preprocessed dataset, located at `args.preprocesseddir`. This folder contains the output of your preprocessing pipeline. To test your pipeline locally, mount this folder read-only: `-v /path/to/preprocessed:/input/preprocessed:ro`.
+4. Model checkpoints, located at `args.checkpointsdir`. (Optional) This folder can be used to store model checkpoints during training, to ensure training is set up correctly. In the event training fails, the checkpoints directory can be used to resume model training. We encourage the usage of this, as it makes the training pipeline more robust, and do the same in our reference implementation. To test your pipeline locally, mount this folder: `-v /path/to/checkpoints:/checkpoints`.
+5. Output folder, located at `args.outputdir`. This folder must contain the trained algorithm checkpoints for inference, and any supporting file required to perform inference. Any file that's not in this folder, will be lost! To test your pipeline locally, mount this folder: `-v /path/to/preprocessed:/output`.
 
+Optionally, you can mount a folder to `/workdir` to debug/see what's going on in your pipeline: `-v /path/to/workdir:/workdir`. Depending on your setup, you can mount a folder with the preprocessing pipeline itself: `-v /path/to/code:/code:ro`.
 
-### Cross-Validation Splits
-We have prepared 5-fold cross-validation splits of all 1500 cases in the [PI-CAI: Public Training and Development Dataset](https://pi-cai.grand-challenge.org/DATA/). We have ensured there is no patient overlap between training/validation splits. You can load these splits as follows:
+-------
 
-```python
-from picai_baseline.splits.picai import train_splits, valid_splits
+Prostate segmentations will be made available to all teams. We provide whole-gland prostate segmentations from [this algorithm](https://grand-challenge.org/algorithms/prostate-segmentation/) at `/input/picai_labels/anatomical_delineations/whole_gland/AI/Bosma22b` (i.e., same as for the PI-CAI Open Development Phase).
 
-for fold, ds_config in train_splits.items():
-    print(f"Training fold {fold} has cases: {ds_config['subject_list']}")
-
-for fold, ds_config in valid_splits.items():
-    print(f"Validation fold {fold} has cases: {ds_config['subject_list']}")
-```
-
-Additionally, we prepared 5-fold cross-validation splits of all cases with an [expert-derived csPCa annotation](https://github.com/DIAGNijmegen/picai_labels/tree/main/csPCa_lesion_delineations/human_expert). These splits are subsets of the splits above. You can load these splits as follows:
-
-```python
-from picai_baseline.splits.picai_nnunet import train_splits, valid_splits
-```
-
-When using `picai_eval` from the command line, we recommend saving the splits to disk. Then, you can pass these to `picai_eval` to ensure all cases were found. You can export the labelled cross-validation splits using:
-
-```bash
-python -m picai_baseline.splits.picai_nnunet --output "/workdir/splits/picai_nnunet"
-```
-
-
-### Data Preprocessing
-We follow the [`nnU-Net Raw Data Archive`][nnunet_raw_data_format] format to prepare our dataset for usage. For this, you can use the [`picai_prep`][picai_prep] module. Note, the [`picai_prep`][picai_prep] module should be automatically installed when installing the `picai_baseline` module, and is installed within the [`picai_nnunet`][picai_nnunet_docker] and [`picai_nndetection`][picai_nndetection_docker] Docker containers as well. 
-
-To convert the dataset in `/input/` into the [`nnU-Net Raw Data Archive`][nnunet_raw_data_format] format, and store it in `/workdir/nnUNet_raw_data`, please follow the instructions [provided here][picai_prep_mha2nnunet], or set your target paths in [`prepare_data.py`](src/picai_baseline/prepare_data.py) and execute it:
-
-```bash
-python src/picai_baseline/prepare_data.py
-```
-
-To adapt/modify the preprocessing pipeline or its default specifications, please make changes to the [`prepare_data.py`](src/picai_baseline/prepare_data.py) script accordingly.
-
-Alternatively, you can use Docker to run the Python script:
-
-```bash
-docker run --cpus=2 --memory=16gb --rm \
-    -v /path/to/input/:/input/ \
-    -v /path/to/workdir/:/workdir/ \
-    -v /path/to/picai_baseline:/scripts/picai_baseline/ \
-    joeranbosma/picai_nnunet:latest python3 /scripts/picai_baseline/src/picai_baseline/prepare_data.py
-```
-
-
-## Baseline Algorithms
-We provide end-to-end training pipelines for csPCa detection/diagnosis in 3D. Each baseline includes a template to encapsulate the trained AI model in a Docker container, and uploading the same to the [grand-challenge.org](https://grand-challenge.org/) platform as an ["algorithm"](https://grand-challenge.org/documentation/algorithms/). 
-
-
-### U-Net
-We include a baseline [U-Net](https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28) to provide a playground environment for participants and kickstart their development cycle. The U-Net baseline generates quick results with minimal complexity, but does so at the expense of sub-optimal performance and low flexibility in adapting to any other task.
-
-[→ Read the full documentation here](unet_baseline.md).
-
-
-### nnU-Net
-The nnU-Net framework [[1]](#1) provides a performant framework for medical image segmentation, which is straightforward to adapt for csPCa detection. 
-
-[→ Read the full documentation here](nnunet_baseline.md).
-
-
-### nnDetection
-The nnDetection framework is geared towards medical object detection [[2]](#2). Setting up nnDetection and tweaking its implementation is not as straightforward as for the [nnUNet](#nnu-net) or [UNet](#u-net) baselines, but it can provide a strong csPCa detection model.
-
-[→ Read the full documentation here](nndetection_baseline.md).
-
-
-## References
-<a id="1" href="https://www.nature.com/articles/s41592-020-01008-z">[1]</a> 
-Fabian Isensee, Paul F. Jaeger, Simon A. A. Kohl, Jens Petersen and Klaus H. Maier-Hein. "nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation". Nature Methods 18.2 (2021): 203-211.
-
-<a id="2" href="https://link.springer.com/chapter/10.1007/978-3-030-87240-3_51">[2]</a> 
-Michael Baumgartner, Paul F. Jaeger, Fabian Isensee, Klaus H. Maier-Hein. "nnDetection: A Self-configuring Method for Medical Object Detection". International Conference on Medical Image Computing and Computer-Assisted Intervention. Springer, Cham, 2021.
-
-<a id="3" href="https://arxiv.org/abs/2112.05151">[3]</a> 
-Joeran Bosma, Anindo Saha, Matin Hosseinzadeh, Ilse Slootweg, Maarten de Rooij, Henkjan Huisman. "Semi-supervised learning with report-guided lesion annotation for deep learning-based prostate cancer detection in bpMRI". arXiv:2112.05151.
-
-<a id="4" href="#">[4]</a> 
-Joeran Bosma, Natalia Alves and Henkjan Huisman. "Performant and Reproducible Deep Learning-Based Cancer Detection Models for Medical Imaging". _Under Review_.
-
-
-##
-If you are using this codebase or some part of it, please cite the following article:
-
-● [A. Saha, J. J. Twilt, J. S. Bosma, B. van Ginneken, D. Yakar, M. Elschot, J. Veltman, J. J. Fütterer, M. de Rooij, H. Huisman, "Artificial Intelligence and Radiologists at Prostate Cancer Detection in MRI: The PI-CAI Challenge (Study Protocol)", DOI: 10.5281/zenodo.6667655](https://zenodo.org/record/6667655)
-
-**BibTeX:**
-```
-@ARTICLE{PICAI_BIAS,
-    author = {Anindo Saha, Jasper J. Twilt, Joeran S. Bosma, Bram van Ginneken, Derya Yakar, Mattijs Elschot, Jeroen Veltman, Jurgen Fütterer, Maarten de Rooij, Henkjan Huisman},
-    title  = {{Artificial Intelligence and Radiologists at Prostate Cancer Detection in MRI: The PI-CAI Challenge (Study Protocol)}}, 
-    year   = {2022},
-    doi    = {10.5281/zenodo.6667655}
-}
-```
-
-[picai_nnunet_docker]: https://hub.docker.com/r/joeranbosma/picai_nnunet
-[picai_nndetection_docker]: https://hub.docker.com/r/joeranbosma/picai_nndetection
-[picai_prep]: https://github.com/DIAGNijmegen/picai_prep
-[nnunet_raw_data_format]: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/dataset_conversion.md
-[picai_prep_mha2nnunet]: https://github.com/DIAGNijmegen/picai_prep#mha-archive--nnu-net-raw-data-archive
-[nnunet-archive]: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/dataset_conversion.md
-[nndetection-archive]: https://github.com/MIC-DKFZ/nnDetection/#adding-new-data-sets
+Custom (whole-gland/zonal) prostate segmentation masks from teams participating in the Closed Testing Phase will be made available in the same format. We will make segmentation masks available with these methods for the public dataset too, so the exact folder structure will be visible in [`picai_labels`](https://github.com/DIAGNijmegen/picai_labels/tree/main/anatomical_delineations). Segmentation masks for the PI-CAI Private Training dataset will be available to any team participating in the Closed Testing Phase.
