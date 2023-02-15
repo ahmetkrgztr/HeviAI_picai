@@ -1,7 +1,0 @@
-numpy
-tqdm
-SimpleITK
-scipy
-scikit-learn
-picai_eval>=1.4.1
-picai_prep>=2.0.1
