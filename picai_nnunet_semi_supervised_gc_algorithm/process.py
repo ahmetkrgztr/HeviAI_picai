@@ -12,45 +12,40 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import time
+import glob
 import json
 import os
 import pickle
+import shutil
 import subprocess
+import time
 from pathlib import Path
-from typing import Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import SimpleITK as sitk
 from evalutils import SegmentationAlgorithm
 from evalutils.validators import (UniqueImagesValidator,
                                   UniquePathIndicesValidator)
+from report_guided_annotation import extract_lesion_candidates
+from tqdm import tqdm
+
 from picai_baseline.nnunet.softmax_export import \
     save_softmax_nifti_from_softmax
 from picai_prep.data_utils import atomic_image_write
-from picai_prep.preprocessing import Sample, crop_or_pad, PreprocessingSettings
-from report_guided_annotation import extract_lesion_candidates
-from pathlib import Path
-import pickle
-import glob
-from typing import List, Optional, Tuple, Union
-
-import numpy as np
-from tqdm import tqdm
-import json
-import SimpleITK as sitk
-import shutil
-import json
+from picai_prep.preprocessing import PreprocessingSettings, Sample, crop_or_pad
 
 try:
     import numpy.typing as npt
 except ImportError:  # pragma: no cover
     pass
 import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import json
+
 
 def get_json_as_dict(json_path):
     with open(json_path, "r") as f:
@@ -68,7 +63,7 @@ class MissingSequenceError(Exception):
 
     def __init__(self, name, folder):
         message = f"Could not find scan for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
 
 
 class MultipleScansSameSequencesError(Exception):
@@ -76,7 +71,7 @@ class MultipleScansSameSequencesError(Exception):
 
     def __init__(self, name, folder):
         message = f"Found multiple scans for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
 
 
 def convert_to_original_extent(pred: np.ndarray, pkl_path: Union[Path, str], dst_path: Union[Path, str]):

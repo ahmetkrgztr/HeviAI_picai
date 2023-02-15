@@ -22,7 +22,7 @@ class MissingSequenceError(Exception):
 
     def __init__(self, name, folder):
         message = f"Could not find scan for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
 
 
 class MultipleScansSameSequencesError(Exception):
@@ -30,7 +30,7 @@ class MultipleScansSameSequencesError(Exception):
 
     def __init__(self, name, folder):
         message = f"Found multiple scans for {name} in {folder} (files: {os.listdir(folder)})"
-        super.__init__(message)
+        super().__init__(message)
 
 
 def convert_to_original_extent(pred: np.ndarray, pkl_path: Union[Path, str], dst_path: Union[Path, str]):
