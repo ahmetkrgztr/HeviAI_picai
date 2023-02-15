@@ -19,13 +19,13 @@ docker run --rm \
 # check peripheral zone segmentation
 docker run --rm \
         -v $DOCKER_FILE_SHARE:/output/ \
-        -v $SCRIPTPATH/test/:/input/ \
+        -v $SCRIPTPATH/output/:/input/ \
         insighttoolkit/simpleitk-notebooks:latest python -c "import sys; import numpy as np; import SimpleITK as sitk; f1 = sitk.GetArrayFromImage(sitk.ReadImage('/output/images/softmax-prostate-peripheral-zone-segmentation/prostate_gland_sm_pz.mha')); f2 = sitk.GetArrayFromImage(sitk.ReadImage('/input/images/softmax-prostate-peripheral-zone-segmentation/prostate_gland_sm_pz.mha')); print('max. difference between prediction and reference:', np.abs(f1-f2).max()); sys.exit(int(np.abs(f1-f2).max() > 1e-3));"
 
 # check central zone segmentation
 docker run --rm \
         -v $DOCKER_FILE_SHARE:/output/ \
-        -v $SCRIPTPATH/test/:/input/ \
+        -v $SCRIPTPATH/output/:/input/ \
         insighttoolkit/simpleitk-notebooks:latest python -c "import sys; import numpy as np; import SimpleITK as sitk; f1 = sitk.GetArrayFromImage(sitk.ReadImage('/output/images/softmax-prostate-central-gland-segmentation/prostate_gland_sm_tz.mha')); f2 = sitk.GetArrayFromImage(sitk.ReadImage('/input/images/softmax-prostate-central-gland-segmentation/prostate_gland_sm_tz.mha')); print('max. difference between prediction and reference:', np.abs(f1-f2).max()); sys.exit(int(np.abs(f1-f2).max() > 1e-3));"
 
 if [ $? -eq 0 ]; then
