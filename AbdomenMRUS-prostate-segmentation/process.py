@@ -157,7 +157,7 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
         pred: sitk.Image = sitk.ReadImage(pred_path)
 
         # save postprocessed prediction to output
-        atomic_file_copy(pred_path, str(self.prostate_segmentation_path))
+        atomic_file_copy(pred_path, str(self.prostate_segmentation_path), mkdir=True)
 
         for pred, save_path in [
             (pz_arr, self.prostate_segmentation_path_pz),
