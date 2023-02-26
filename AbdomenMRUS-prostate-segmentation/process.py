@@ -9,12 +9,11 @@ import SimpleITK as sitk
 from evalutils import SegmentationAlgorithm
 from evalutils.validators import (UniqueImagesValidator,
                                   UniquePathIndicesValidator)
-from picai_prep import atomic_file_copy, atomic_image_write
-from picai_prep.preprocessing import (PreprocessingSettings, Sample,
-                                      resample_to_reference_scan)
-
 from picai_baseline.nnunet.softmax_export import \
     save_softmax_nifti_from_softmax
+from picai_prep import atomic_image_write
+from picai_prep.preprocessing import (PreprocessingSettings, Sample,
+                                      resample_to_reference_scan)
 
 
 class MissingSequenceError(Exception):
@@ -157,7 +156,7 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
         pred: sitk.Image = sitk.ReadImage(pred_path)
 
         # save postprocessed prediction to output
-        atomic_file_copy(pred_path, str(self.prostate_segmentation_path), mkdir=True)
+        atomic_image_write(pred, self.prostate_segmentation_path, mkdir=True)
 
         for pred, save_path in [
             (pz_arr, self.prostate_segmentation_path_pz),
