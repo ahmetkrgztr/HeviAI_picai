@@ -153,10 +153,13 @@ class ProstateSegmentationAlgorithm(SegmentationAlgorithm):
 
         # read postprocessed prediction
         pred_path = str(self.nnunet_out_dir / "scan.nii.gz")
-        pred: sitk.Image = sitk.ReadImage(pred_path)
+        pred_postprocessed: sitk.Image = sitk.ReadImage(pred_path)
+
+        # remove metadata to get rid of SimpleITK warning
+        strip_metadata(pred_postprocessed)
 
         # save postprocessed prediction to output
-        atomic_image_write(pred, self.prostate_segmentation_path, mkdir=True)
+        atomic_image_write(pred_postprocessed, self.prostate_segmentation_path, mkdir=True)
 
         for pred, save_path in [
             (pz_arr, self.prostate_segmentation_path_pz),
